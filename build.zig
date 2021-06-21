@@ -19,6 +19,12 @@ pub fn build(b: *Builder) !void {
         .sha = @embedFile("zigetsha"),
     }).resolve(b.allocator);
 
+    const zarc_main = try (GitRepo {
+        .url = "https://github.com/SuperAuguste/zarc",
+        .branch = null,
+        .sha = @embedFile("zarcsha"),
+    }).resolveOneFile(b.allocator, "src" ++ std.fs.path.sep_str ++ "main.zig");
+
     // TODO: implement this if/when we get @tryImport
     //if (zigetbuild) |_| { } else {
     //    std.log.err("TODO: add zigetbuild package and recompile/reinvoke build.d", .{});
@@ -33,7 +39,7 @@ pub fn build(b: *Builder) !void {
     const ssl_backend = zigetbuild.getSslBackend(b);
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
-    const exe = try addZigupExe(b, ziget_repo, target, mode, ssl_backend);
+    const exe = try addZigupExe(b, ziget_repo, target, mode, ssl_backend, zarc_main);
     exe.install();
 
     const run_cmd = exe.run();
@@ -59,7 +65,7 @@ fn addTest(b: *Builder, exe: *std.build.LibExeObjStep, target: std.zig.CrossTarg
     test_step.dependOn(&run_cmd.step);
 }
 
-fn addZigupExe(b: *Builder, ziget_repo: []const u8, target: std.zig.CrossTarget, mode: std.builtin.Mode, ssl_backend: ?SslBackend) !*std.build.LibExeObjStep {
+fn addZigupExe(b: *Builder, ziget_repo: []const u8, target: std.zig.CrossTarget, mode: std.builtin.Mode, ssl_backend: ?SslBackend, zarc_main: []const u8) !*std.build.LibExeObjStep {
     const require_ssl_backend = b.allocator.create(RequireSslBackendStep) catch unreachable;
     require_ssl_backend.* = RequireSslBackendStep.init(b, "the zigup exe", ssl_backend);
 
@@ -87,6 +93,10 @@ fn addZigupExe(b: *Builder, ziget_repo: []const u8, target: std.zig.CrossTarget,
         .name = "ziget",
         .path = .{ .path = try join(b, &[_][]const u8 { ziget_repo, "ziget.zig" }) },
         .dependencies = &[_]Pkg {ziget_ssl_pkg},
+    });
+    exe.addPackage(Pkg {
+        .name = "zarc",
+        .path = .{ .path = zarc_main },
     });
     exe.step.dependOn(&require_ssl_backend.step);
     return exe;
